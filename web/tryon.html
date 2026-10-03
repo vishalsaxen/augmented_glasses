@@ -1,0 +1,776 @@
+<title>Frame Fitting Mirror</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an optician's mirror (dark stage) beside a fitting card (frames, finish, fit, face notes); stacks on phones. */
+:root {
+  --bg: #eef1f3;
+  --panel: #fbfcfc;
+  --ink: #17222b;
+  --muted: #5d6b76;
+  --line: #d6dde2;
+  --accent: #b5651d;        /* tortoiseshell amber */
+  --accent-ink: #ffffff;
+  --accent-soft: #f4e4d3;
+  --good: #2f7a52;
+  --stage: #0f171d;
+  --stage-ink: #e8eef2;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1116; --panel: #131c23; --ink: #e6ecf0; --muted: #93a3ae; --line: #25323c;
+    --accent: #e09045; --accent-ink: #1a0f05; --accent-soft: #3a2817; --good: #5dc08a;
+    --stage: #05090c; --stage-ink: #e8eef2; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1116; --panel: #131c23; --ink: #e6ecf0; --muted: #93a3ae; --line: #25323c;
+  --accent: #e09045; --accent-ink: #1a0f05; --accent-soft: #3a2817; --good: #5dc08a;
+  --stage: #05090c; --stage-ink: #e8eef2; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 32px; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw, 30px); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { color: var(--muted); margin: 0; font-size: 14px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Stage */
+.stage { position: relative; background: var(--stage); color: var(--stage-ink); border-radius: var(--r); overflow: hidden; aspect-ratio: 4 / 3; max-width: 100%; }
+.stage canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.stage video { display: none; }
+.hud { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; justify-content: space-between; gap: 8px; pointer-events: none; }
+.chip { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: 0.04em; padding: 5px 9px; border-radius: 999px; background: rgba(5, 9, 12, 0.62); color: var(--stage-ink); backdrop-filter: blur(6px); display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #7d8b95; }
+.dot.on { background: #5dc08a; box-shadow: 0 0 0 3px rgba(93, 192, 138, 0.25); }
+.dot.warn { background: #e0b045; }
+.idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+.idle h2 { font-family: var(--f-display); font-weight: 500; font-size: clamp(18px, 2.4vw, 24px); margin: 0; max-width: 28ch; text-wrap: balance; }
+.idle p { margin: 0; color: #a9b7c1; max-width: 46ch; font-size: 14px; }
+.idle canvas { width: min(440px, 80%); height: auto; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.btn { font: 600 14px/1 var(--f-body); border: 1px solid transparent; border-radius: 999px; padding: 11px 18px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.btn:focus-visible, .card:focus-visible, .sw:focus-visible, .tint:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; color: var(--stage-ink); border-color: rgba(232, 238, 242, 0.35); }
+.btn.plain { background: var(--panel); color: var(--ink); border-color: var(--line); }
+.notice { font-size: 13px; color: #f1c98f; max-width: 52ch; }
+.toolbar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar .btn { padding: 9px 14px; font-size: 13px; background: rgba(5, 9, 12, 0.62); color: var(--stage-ink); border-color: rgba(232, 238, 242, 0.2); backdrop-filter: blur(6px); }
+.toolbar .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.nowwearing { font-family: var(--f-display); font-size: 15px; padding: 7px 12px; border-radius: 999px; background: rgba(5, 9, 12, 0.62); backdrop-filter: blur(6px); }
+.nowwearing small { font-family: var(--f-mono); font-size: 11px; color: #a9b7c1; margin-left: 6px; }
+
+/* Panel */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sec h3 { margin: 0; font: 600 11.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card { position: relative; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 8px 8px 7px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card canvas { width: 100%; height: auto; aspect-ratio: 16 / 7; }
+.card b { font-weight: 600; font-size: 13.5px; }
+.card .size { font-family: var(--f-mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.card .suits { position: absolute; top: 6px; right: 6px; font: 600 10px/1 var(--f-body); letter-spacing: 0.04em; text-transform: uppercase; color: var(--good); background: var(--panel); border: 1px solid currentColor; padding: 3px 5px; border-radius: 999px; }
+.swatches, .tints { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.tint { font: 500 12.5px/1 var(--f-body); padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tint i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1px solid var(--line); }
+.tint[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 44px; align-items: center; gap: 10px; font-size: 13px; }
+.row output { font-family: var(--f-mono); font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fact { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.fact span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.fact b { font-family: var(--f-mono); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.advice { margin: 0; font-size: 13.5px; color: var(--muted); }
+.advice strong { color: var(--ink); font-weight: 600; }
+.foot { font-size: 12.5px; color: var(--muted); margin: 0; }
+.foot code { font-family: var(--f-mono); font-size: 11.5px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Frame Fitting <span>Mirror</span></h1>
+      <p class="sub">Look into the camera, pick a frame, and see it sit on your face as you move.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="stage" id="stage" aria-label="Try-on mirror">
+      <canvas id="view" width="1280" height="960"></canvas>
+      <video id="video" playsinline muted></video>
+
+      <div class="idle" id="idle">
+        <canvas id="hero" width="880" height="360" aria-hidden="true"></canvas>
+        <h2>Try frames on your own face, live</h2>
+        <p>The mirror finds your eyes, nose and temples, then fits the frame to them. Your camera feed stays on this device.</p>
+        <div class="actions">
+          <button class="btn primary" id="startCam" type="button">Start camera</button>
+          <label class="btn ghost" for="photo">Use a photo</label>
+          <input id="photo" type="file" accept="image/*" hidden>
+        </div>
+        <p class="notice" id="notice" hidden></p>
+      </div>
+
+      <div class="hud" id="hud" hidden>
+        <span class="chip"><span class="dot" id="trackDot"></span><span id="trackText">Loading face model</span></span>
+        <span class="chip" id="fps">— fps</span>
+      </div>
+      <div class="toolbar" id="toolbar" hidden>
+        <span class="nowwearing" id="nowWearing">Wayfarer<small>50□20 145</small></span>
+        <div class="actions">
+          <button class="btn" id="prevBtn" type="button" aria-label="Previous frame">‹</button>
+          <button class="btn" id="nextBtn" type="button" aria-label="Next frame">›</button>
+          <button class="btn" id="stopBtn" type="button">Stop</button>
+          <button class="btn primary" id="snapBtn" type="button">Save photo</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Fitting options">
+      <div class="sec">
+        <h3>Frames <span id="shapeTag"></span></h3>
+        <div class="cards" id="cards"></div>
+      </div>
+      <div class="sec">
+        <h3>Finish</h3>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div class="sec">
+        <h3>Lenses</h3>
+        <div class="tints" id="tints"></div>
+      </div>
+      <div class="sec">
+        <h3>Fit</h3>
+        <div class="row"><label for="size">Size</label><input id="size" type="range" min="85" max="115" value="100"><output id="sizeOut">100%</output></div>
+        <div class="row"><label for="lift">Height</label><input id="lift" type="range" min="-40" max="40" value="0"><output id="liftOut">0</output></div>
+      </div>
+      <div class="sec">
+        <h3>Your face <span id="measNote" style="text-transform:none;letter-spacing:0;font-weight:500">estimates</span></h3>
+        <div class="facts">
+          <div class="fact"><span>Shape</span><b id="fShape">—</b></div>
+          <div class="fact"><span>PD</span><b id="fPd">—</b></div>
+          <div class="fact"><span>Width</span><b id="fWidth">—</b></div>
+        </div>
+        <p class="advice" id="advice">Start the camera or add a photo. The mirror will read your face shape and mark the frames that suit it.</p>
+      </div>
+      <p class="foot">Measurements use the average iris width (11.7 mm) as a ruler, so treat them as a guide, not a prescription.</p>
+    </aside>
+  </div>
+</div>
+
+<script type="module">
+/* ---------------------------------------------------------------
+   Config: where the face model and runtime are loaded from.
+   Local ./vendor copies are tried first (works offline and inside
+   sandboxed hosts); public CDNs are the fallback.
+---------------------------------------------------------------- */
+const MP_VERSION = "1.0.1";
+const SOURCES = {
+  bundle: ["./vendor/vision_bundle.mjs", `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`],
+  wasm: ["./vendor/wasm", `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`],
+  model: ["./vendor/face_landmarker.task", "./vendor/face_landmarker.task.b64.txt", "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"],
+};
+
+/* ---------------------------------------------------------------
+   Frame catalogue. Each frame is drawn in a 1000-unit-wide space:
+   x in [-500, 500] (temple to temple), y = 0 on the eye line.
+   lens() traces the right-hand lens (x > 0); it is mirrored for
+   the left. Pure data + drawing, so it ports to a mobile canvas.
+---------------------------------------------------------------- */
+const poly = (pts, r) => (ctx) => {
+  const n = pts.length;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(pts[n - 1], pts[0]);
+  ctx.moveTo(start[0], start[1]);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    ctx.arcTo(p[0], p[1], q[0], q[1], r);
+  }
+  ctx.closePath();
+};
+const hexPts = (cx, cy, R) => Array.from({ length: 6 }, (_, i) => [cx + R * Math.cos(Math.PI / 3 * i), cy + R * 0.86 * Math.sin(Math.PI / 3 * i)]);
+
+const FRAMES = [
+  { id: "wayfarer", name: "Wayfarer", size: "50□20 145", rim: 30, metal: false, brow: 16,
+    suits: ["round", "oval", "oblong"],
+    lens: poly([[48, -112], [455, -138], [442, 38], [388, 116], [104, 112], [58, 42]], 52),
+    bridge: [[-58, -96], [0, -112], [58, -96]] },
+  { id: "round", name: "Round", size: "48□22 145", rim: 10, metal: true,
+    suits: ["square", "heart"],
+    lens: (ctx) => { ctx.moveTo(430, -5); ctx.arc(255, -5, 175, 0, Math.PI * 2); ctx.closePath(); },
+    bridge: [[-82, -40], [0, -88], [82, -40]] },
+  { id: "aviator", name: "Aviator", size: "58□14 140", rim: 8, metal: true, doubleBridge: true,
+    suits: ["oval", "square", "heart", "oblong"],
+    lens: (ctx) => {
+      ctx.moveTo(62, -122); ctx.lineTo(430, -132);
+      ctx.bezierCurveTo(482, -112, 478, 40, 404, 120);
+      ctx.bezierCurveTo(330, 196, 160, 186, 100, 112);
+      ctx.bezierCurveTo(48, 50, 40, -64, 62, -122); ctx.closePath();
+    },
+    bridge: [[-62, -78], [0, -96], [62, -78]] },
+  { id: "cateye", name: "Cat-eye", size: "52□18 140", rim: 26, metal: false, brow: 10,
+    suits: ["oval", "round", "square"],
+    lens: poly([[52, -96], [330, -112], [488, -168], [446, 34], [364, 110], [112, 106], [58, 40]], 46),
+    bridge: [[-60, -84], [0, -100], [60, -84]] },
+  { id: "rectangle", name: "Rectangle", size: "54□17 145", rim: 14, metal: false,
+    suits: ["round"],
+    lens: poly([[52, -88], [460, -96], [455, 84], [58, 90]], 38),
+    bridge: [[-60, -70], [0, -86], [60, -70]] },
+  { id: "browline", name: "Browline", size: "51□21 145", rim: 7, metal: true, browBar: 34,
+    suits: ["heart"],
+    lens: poly([[50, -100], [455, -108], [440, 40], [380, 116], [110, 112], [58, 44]], 48),
+    bridge: [[-58, -96], [0, -104], [58, -96]] },
+  { id: "oversized", name: "Oversized", size: "60□16 140", rim: 26, metal: false,
+    suits: ["oblong"],
+    lens: poly([[46, -150], [472, -162], [466, 120], [410, 178], [92, 172], [50, 120]], 78),
+    bridge: [[-56, -112], [0, -128], [56, -112]] },
+  { id: "hexagon", name: "Hexagon", size: "51□20 145", rim: 9, metal: true,
+    suits: ["round"],
+    lens: poly(hexPts(258, -6, 196), 14),
+    bridge: [[-66, -60], [0, -92], [66, -60]] },
+];
+
+const FINISHES = [
+  { id: "black", name: "Gloss black", color: "#14171a" },
+  { id: "tortoise", name: "Tortoiseshell", color: "pattern" },
+  { id: "crystal", name: "Crystal", color: "rgba(214, 228, 236, 0.55)" },
+  { id: "gold", name: "Gold", color: "#c9a25a" },
+  { id: "silver", name: "Silver", color: "#b9c1c7" },
+  { id: "navy", name: "Navy", color: "#1f3657" },
+  { id: "wine", name: "Wine", color: "#6e1f2d" },
+];
+
+const TINTS = [
+  { id: "clear", name: "Clear", top: "rgba(200,225,240,0.10)", bottom: "rgba(200,225,240,0.04)" },
+  { id: "grey", name: "Grey sun", top: "rgba(25,30,34,0.78)", bottom: "rgba(25,30,34,0.62)" },
+  { id: "brown", name: "Brown fade", top: "rgba(90,52,22,0.82)", bottom: "rgba(160,110,60,0.18)" },
+  { id: "mirror", name: "Blue mirror", top: "rgba(40,110,200,0.80)", bottom: "rgba(120,60,180,0.70)" },
+  { id: "rose", name: "Rose", top: "rgba(220,110,130,0.45)", bottom: "rgba(240,160,170,0.25)" },
+];
+
+/* Which frame families flatter which face shapes (common optician guidance). */
+const SHAPE_ADVICE = {
+  oval: "Balanced proportions suit almost any frame. Go bold with Aviator, Wayfarer or Cat-eye.",
+  round: "Angular frames add definition. Try Rectangle, Hexagon, Wayfarer or Cat-eye.",
+  square: "Curved frames soften a strong jaw. Try Round, Aviator or Cat-eye.",
+  heart: "Frames that widen at the bottom balance a wider forehead. Try Aviator, Round or Browline.",
+  oblong: "Deep, wide frames shorten a longer face. Try Oversized, Wayfarer or Aviator.",
+};
+
+/* --------------------------- State --------------------------- */
+const state = {
+  frame: "wayfarer", finish: "black", tint: "clear", size: 1, lift: 0,
+  mode: "idle",            // idle | camera | photo
+  pose: null,              // smoothed pose in canvas px
+  shapeAcc: null, shape: null, pd: null, widthMm: null,
+};
+try { const saved = JSON.parse(localStorage.getItem("ffm-prefs") || "{}"); Object.assign(state, pick(saved, ["frame", "finish", "tint"])); } catch {}
+function pick(o, keys) { const r = {}; for (const k of keys) if (o && typeof o[k] === "string") r[k] = o[k]; return r; }
+function savePrefs() { try { localStorage.setItem("ffm-prefs", JSON.stringify({ frame: state.frame, finish: state.finish, tint: state.tint })); } catch {} }
+if (!FRAMES.some(f => f.id === state.frame)) state.frame = "wayfarer";
+if (!FINISHES.some(f => f.id === state.finish)) state.finish = "black";
+if (!TINTS.some(f => f.id === state.tint)) state.tint = "clear";
+
+const $ = (id) => document.getElementById(id);
+const view = $("view"), vctx = view.getContext("2d");
+const video = $("video");
+
+/* ----------------------- Frame renderer ---------------------- */
+let tortoise = null;
+function tortoisePattern(ctx) {
+  if (!tortoise) {
+    const c = document.createElement("canvas"); c.width = c.height = 160;
+    const g = c.getContext("2d");
+    g.fillStyle = "#4a2410"; g.fillRect(0, 0, 160, 160);
+    let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 70; i++) {
+      const x = rnd() * 160, y = rnd() * 160, r = 6 + rnd() * 22;
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      const amber = rnd() > 0.45;
+      grad.addColorStop(0, amber ? "rgba(214,140,58,0.85)" : "rgba(20,8,2,0.8)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad; g.beginPath(); g.ellipse(x, y, r, r * 0.6, rnd() * 3, 0, Math.PI * 2); g.fill();
+    }
+    tortoise = c;
+  }
+  return ctx.createPattern(tortoise, "repeat");
+}
+function finishStyle(ctx, finishId) {
+  const f = FINISHES.find(x => x.id === finishId) || FINISHES[0];
+  return f.color === "pattern" ? tortoisePattern(ctx) : f.color;
+}
+
+function traceLens(ctx, frame, side) {
+  ctx.save(); ctx.scale(side, 1); ctx.beginPath(); frame.lens(ctx); ctx.restore();
+}
+
+/* Draw a frame at the current transform (1000-unit space). */
+function drawFrame(ctx, frame, finishId, tintId, opts = {}) {
+  const stroke = finishStyle(ctx, finishId);
+  const tint = TINTS.find(t => t.id === tintId) || TINTS[0];
+  const rim = frame.rim;
+
+  // Lenses: tint + glare, clipped to each lens.
+  for (const side of [1, -1]) {
+    ctx.save();
+    traceLens(ctx, frame, side);
+    const g = ctx.createLinearGradient(0, -170, 0, 180);
+    g.addColorStop(0, tint.top); g.addColorStop(1, tint.bottom);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.clip();
+    ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.beginPath();
+    ctx.moveTo(side * 120, -200); ctx.lineTo(side * 200, -200); ctx.lineTo(side * 60, 200); ctx.lineTo(side * -20, 200); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(side * 250, -200); ctx.lineTo(side * 285, -200); ctx.lineTo(side * 145, 200); ctx.lineTo(side * 110, 200); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.strokeStyle = stroke;
+
+  // Bridge
+  const b = frame.bridge;
+  ctx.lineWidth = Math.max(rim * 0.8, 9);
+  ctx.beginPath(); ctx.moveTo(b[0][0], b[0][1]); ctx.quadraticCurveTo(b[1][0], b[1][1], b[2][0], b[2][1]); ctx.stroke();
+  if (frame.doubleBridge) {
+    ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(-70, -126); ctx.lineTo(70, -126); ctx.stroke();
+  }
+
+  // Rims
+  for (const side of [1, -1]) {
+    traceLens(ctx, frame, side);
+    ctx.lineWidth = rim; ctx.stroke();
+    if (frame.brow) { // heavier top edge on acetate frames
+      ctx.save(); traceLens(ctx, frame, side); ctx.clip();
+      ctx.fillStyle = stroke; ctx.fillRect(-520, -220, 1040, 60 + frame.brow);
+      ctx.restore();
+    }
+  }
+  if (frame.browBar) { // browline: thick acetate bar over a thin metal rim
+    for (const side of [1, -1]) {
+      ctx.save(); ctx.scale(side, 1);
+      ctx.lineWidth = frame.browBar;
+      ctx.beginPath(); ctx.moveTo(60, -98); ctx.quadraticCurveTo(260, -122, 452, -104); ctx.lineTo(462, -40); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // End pieces (hinges) toward the temples
+  ctx.lineWidth = Math.max(rim * 0.9, 10);
+  for (const side of [1, -1]) {
+    ctx.beginPath(); ctx.moveTo(side * 445, -100); ctx.lineTo(side * 500, -92); ctx.stroke();
+  }
+
+  // Specular highlight along the top of each rim
+  if (!opts.flat) {
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = Math.max(rim * 0.16, 2);
+    for (const side of [1, -1]) {
+      ctx.save(); ctx.translate(0, -rim * 0.25);
+      traceLens(ctx, frame, side); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(-520, -240, 1040, 170); ctx.clip();
+      ctx.translate(0, -rim * 0.25); traceLens(ctx, frame, side); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+function drawPreview(canvas, frame, scale = 0.92) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2 + canvas.height * 0.02);
+  const s = (canvas.width * scale) / 1000;
+  ctx.scale(s, s);
+  drawFrame(ctx, frame, state.finish, state.tint === "clear" ? "clear" : state.tint, { flat: true });
+  ctx.restore();
+}
+
+/* --------------------------- Picker -------------------------- */
+const cardsEl = $("cards");
+function buildCards() {
+  cardsEl.innerHTML = "";
+  for (const f of FRAMES) {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "card"; btn.id = "card-" + f.id;
+    btn.setAttribute("aria-pressed", String(f.id === state.frame));
+    const cv = document.createElement("canvas"); cv.width = 320; cv.height = 140;
+    const name = document.createElement("b"); name.textContent = f.name;
+    const size = document.createElement("span"); size.className = "size"; size.textContent = f.size;
+    btn.append(cv, name, size);
+    if (state.shape && f.suits.includes(state.shape)) {
+      const tag = document.createElement("span"); tag.className = "suits"; tag.textContent = "Suits you"; btn.append(tag);
+    }
+    btn.addEventListener("click", () => selectFrame(f.id));
+    cardsEl.append(btn);
+    drawPreview(cv, f);
+  }
+}
+function buildSwatches() {
+  const el = $("swatches"); el.innerHTML = "";
+  for (const f of FINISHES) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "sw"; b.id = "sw-" + f.id; b.title = f.name; b.setAttribute("aria-label", f.name);
+    b.setAttribute("aria-pressed", String(f.id === state.finish));
+    b.style.background = f.color === "pattern" ? "radial-gradient(circle at 30% 35%, #d68c3a 0 18%, transparent 30%), radial-gradient(circle at 70% 65%, #1a0a02 0 22%, transparent 34%), #4a2410" : f.color;
+    b.addEventListener("click", () => { state.finish = f.id; savePrefs(); buildSwatches(); buildCards(); refreshStill(); });
+    el.append(b);
+  }
+}
+function buildTints() {
+  const el = $("tints"); el.innerHTML = "";
+  for (const t of TINTS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tint"; b.id = "tint-" + t.id;
+    b.setAttribute("aria-pressed", String(t.id === state.tint));
+    const i = document.createElement("i"); i.style.background = `linear-gradient(${t.top}, ${t.bottom})`;
+    b.append(i, document.createTextNode(t.name));
+    b.addEventListener("click", () => { state.tint = t.id; savePrefs(); buildTints(); buildCards(); refreshStill(); });
+    el.append(b);
+  }
+}
+function selectFrame(id) {
+  state.frame = id; savePrefs();
+  for (const f of FRAMES) $("card-" + f.id)?.setAttribute("aria-pressed", String(f.id === id));
+  updateNowWearing(); refreshStill();
+}
+function stepFrame(d) {
+  const i = FRAMES.findIndex(f => f.id === state.frame);
+  selectFrame(FRAMES[(i + d + FRAMES.length) % FRAMES.length].id);
+}
+function updateNowWearing() {
+  const f = FRAMES.find(x => x.id === state.frame);
+  const el = $("nowWearing"); el.textContent = f.name;
+  const s = document.createElement("small"); s.textContent = f.size; el.append(s);
+}
+
+$("size").addEventListener("input", (e) => { state.size = e.target.value / 100; $("sizeOut").textContent = e.target.value + "%"; refreshStill(); });
+$("lift").addEventListener("input", (e) => { state.lift = +e.target.value; $("liftOut").textContent = (state.lift > 0 ? "+" : "") + state.lift; refreshStill(); });
+$("prevBtn").addEventListener("click", () => stepFrame(-1));
+$("nextBtn").addEventListener("click", () => stepFrame(1));
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input")) return;
+  if (e.key === "ArrowRight") stepFrame(1);
+  if (e.key === "ArrowLeft") stepFrame(-1);
+});
+
+/* ------------------------- Hero art -------------------------- */
+let heroT = 0, heroRaf = 0;
+function animateHero() {
+  const c = $("hero"), ctx = c.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const frame = FRAMES.find(f => f.id === state.frame);
+  ctx.clearRect(0, 0, c.width, c.height);
+  const pool = ctx.createRadialGradient(c.width / 2, c.height / 2, 10, c.width / 2, c.height / 2, c.width * 0.42);
+  pool.addColorStop(0, "rgba(214, 228, 236, 0.30)"); pool.addColorStop(1, "rgba(214, 228, 236, 0)");
+  ctx.fillStyle = pool; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.save();
+  ctx.translate(c.width / 2, c.height / 2);
+  const tilt = reduce ? 0 : Math.sin(heroT / 70) * 0.05;
+  const yaw = reduce ? 0 : Math.sin(heroT / 110) * 0.25;
+  ctx.rotate(tilt); ctx.scale(Math.cos(yaw) * 0.82, 0.82);
+  drawFrame(ctx, frame, state.finish, state.tint);
+  ctx.restore();
+  heroT++;
+  if (state.mode === "idle") heroRaf = requestAnimationFrame(animateHero);
+}
+
+/* --------------------- Face model loading -------------------- */
+let landmarker = null, vision = null, loadPromise = null;
+async function firstOk(urls, fn) {
+  let lastErr;
+  for (const u of urls) { try { return await fn(u); } catch (e) { lastErr = e; } }
+  throw lastErr;
+}
+async function fetchBuffer(url) {
+  const r = await fetch(url); if (!r.ok) throw new Error(r.status + " " + url);
+  if (url.endsWith(".b64.txt")) { // base64 copy for hosts that only serve text types
+    const bin = atob((await r.text()).trim()), out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function headOk(url) {
+  const r = await fetch(url, { method: "HEAD" }); if (!r.ok) throw new Error(String(r.status)); return url;
+}
+function loadModel() {
+  if (loadPromise) return loadPromise;
+  loadPromise = (async () => {
+    setTrack("warn", "Loading face model");
+    vision = await firstOk(SOURCES.bundle, (u) => import(u));
+    const wasmBase = await firstOk(SOURCES.wasm, (u) => headOk(u + "/vision_wasm_internal.wasm").then(() => u)).catch(() => SOURCES.wasm[1]);
+    const fileset = await vision.FilesetResolver.forVisionTasks(wasmBase);
+    const modelAssetBuffer = await firstOk(SOURCES.model, fetchBuffer);
+    const make = (delegate) => vision.FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetBuffer, delegate },
+      runningMode: "VIDEO", numFaces: 1,
+      outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false,
+    });
+    try { landmarker = await make("GPU"); } catch { landmarker = await make("CPU"); }
+    return landmarker;
+  })();
+  loadPromise.catch(() => { loadPromise = null; });
+  return loadPromise;
+}
+
+/* ----------------------- Pose estimation --------------------- */
+const LM = { irisR: 468, irisL: 473, irisR_a: 469, irisR_b: 471, irisL_a: 474, irisL_b: 476,
+  noseTip: 1, cheekA: 234, cheekB: 454, top: 10, chin: 152, jawA: 172, jawB: 397, browA: 54, browB: 284 };
+const IRIS_MM = 11.7;
+
+function poseFrom(lms, W, H, mirror) {
+  const P = (i) => ({ x: (mirror ? 1 - lms[i].x : lms[i].x) * W, y: lms[i].y * H });
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  let a = P(LM.irisR), b = P(LM.irisL);
+  const [l, r] = a.x < b.x ? [a, b] : [b, a];
+  const mid = { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2 };
+  const roll = Math.atan2(r.y - l.y, r.x - l.x);
+
+  let cA = P(LM.cheekA), cB = P(LM.cheekB);
+  const [cl, cr] = cA.x < cB.x ? [cA, cB] : [cB, cA];
+  const nose = P(LM.noseTip);
+  const dl = d(nose, cl), dr = d(nose, cr);
+  const yaw = Math.asin(Math.max(-0.85, Math.min(0.85, ((dr - dl) / (dr + dl)) * 1.8)));
+  const cosY = Math.max(Math.cos(yaw), 0.45);
+  const faceW = d(cl, cr) / cosY;
+
+  // Glasses sit ~40% of the way from the eyes to the nose tip: shift toward the nose.
+  const cr_ = Math.cos(roll), sr = Math.sin(roll);
+  const nx = (nose.x - mid.x) * cr_ + (nose.y - mid.y) * sr;
+
+  const iris = (d(P(LM.irisR_a), P(LM.irisR_b)) + d(P(LM.irisL_a), P(LM.irisL_b))) / 2;
+  const mmPerPx = iris > 0 ? IRIS_MM / iris : 0;
+
+  return {
+    x: mid.x, y: mid.y, roll, yaw, faceW, shift: nx * 0.4,
+    pdMm: (d(l, r) / cosY) * mmPerPx, widthMm: faceW * mmPerPx,
+    ratios: {
+      lw: d(P(LM.top), P(LM.chin)) / d(cl, cr),
+      jaw: d(P(LM.jawA), P(LM.jawB)) / d(cl, cr),
+      brow: d(P(LM.browA), P(LM.browB)) / d(cl, cr),
+    },
+  };
+}
+
+function smooth(prev, next, k) {
+  if (!prev) return { ...next };
+  const out = { ...next };
+  for (const key of ["x", "y", "faceW", "shift"]) out[key] = prev[key] + (next[key] - prev[key]) * k;
+  // angles
+  for (const key of ["roll", "yaw"]) out[key] = prev[key] + (next[key] - prev[key]) * k;
+  return out;
+}
+
+function updateFaceFacts(p) {
+  if (Math.abs(p.yaw) < 0.18) {
+    const acc = state.shapeAcc || { n: 0, lw: 0, jaw: 0, brow: 0, pd: 0, w: 0 };
+    acc.n++; const k = 1 / Math.min(acc.n, 60);
+    acc.lw += (p.ratios.lw - acc.lw) * k; acc.jaw += (p.ratios.jaw - acc.jaw) * k; acc.brow += (p.ratios.brow - acc.brow) * k;
+    acc.pd += (p.pdMm - acc.pd) * k; acc.w += (p.widthMm - acc.w) * k;
+    state.shapeAcc = acc;
+    if (acc.n === 15 || acc.n % 30 === 0) renderFaceFacts();
+  }
+}
+function classifyShape({ lw, jaw, brow }) {
+  // Heuristic on mesh proportions (mesh top sits near the hairline).
+  if (lw > 1.42) return "oblong";
+  if (brow > jaw + 0.1 && jaw < 0.8) return "heart";
+  if (jaw >= 0.84) return lw < 1.28 ? "square" : "oval";
+  if (lw < 1.24) return "round";
+  return "oval";
+}
+function renderFaceFacts() {
+  const acc = state.shapeAcc; if (!acc || acc.n < 10) return;
+  const shape = classifyShape(acc);
+  const changed = shape !== state.shape;
+  state.shape = shape;
+  $("fShape").textContent = shape[0].toUpperCase() + shape.slice(1);
+  $("fPd").textContent = Math.round(acc.pd) + " mm";
+  $("fWidth").textContent = Math.round(acc.w) + " mm";
+  const fit = acc.w < 132 ? "Small (lens 46–50)" : acc.w < 142 ? "Medium (lens 50–54)" : "Large (lens 54–58)";
+  const adv = $("advice"); adv.textContent = "";
+  const s1 = document.createElement("strong"); s1.textContent = `${$("fShape").textContent} face. `;
+  adv.append(s1, document.createTextNode(SHAPE_ADVICE[shape] + " Size guide: "));
+  const s2 = document.createElement("strong"); s2.textContent = fit + "."; adv.append(s2);
+  $("shapeTag").textContent = "";
+  if (changed) buildCards();
+}
+
+/* --------------------------- Render -------------------------- */
+function drawOverlay(ctx, pose) {
+  const frame = FRAMES.find(f => f.id === state.frame);
+  const scale = (pose.faceW * 1.04 * state.size) / 1000;
+  ctx.save();
+  ctx.translate(pose.x, pose.y);
+  ctx.rotate(pose.roll);
+  ctx.translate(pose.shift, state.lift * scale * 2);
+  ctx.scale(scale * Math.cos(pose.yaw), scale * 1.1);
+  ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 12 / scale; ctx.shadowOffsetY = 6 / scale;
+  drawFrame(ctx, frame, state.finish, state.tint);
+  ctx.restore();
+}
+function drawGuide(ctx, W, H) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(232,238,242,0.55)"; ctx.setLineDash([10, 10]); ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(W / 2, H / 2, Math.min(W, H) * 0.22, Math.min(W, H) * 0.3, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle = "rgba(232,238,242,0.85)";
+  ctx.font = `500 ${Math.round(H * 0.035)}px Figtree, sans-serif`; ctx.textAlign = "center";
+  ctx.fillText("Center your face in the oval", W / 2, H / 2 + Math.min(W, H) * 0.36);
+  ctx.restore();
+}
+
+let lastVideoTime = -1, rafId = 0, fpsT = performance.now(), fpsN = 0, missCount = 0;
+function loop() {
+  if (state.mode !== "camera") return;
+  const W = view.width, H = view.height;
+  if (video.readyState >= 2) {
+    vctx.save(); vctx.translate(W, 0); vctx.scale(-1, 1);
+    vctx.drawImage(video, 0, 0, W, H); vctx.restore();
+    if (landmarker && video.currentTime !== lastVideoTime) {
+      lastVideoTime = video.currentTime;
+      const res = landmarker.detectForVideo(video, performance.now());
+      const lms = res.faceLandmarks && res.faceLandmarks[0];
+      if (lms && lms.length >= 478) {
+        const p = poseFrom(lms, W, H, true);
+        state.pose = smooth(state.pose, p, 0.55); missCount = 0;
+        updateFaceFacts(p);
+        setTrack("on", "Tracking your face");
+      } else if (++missCount > 6) { state.pose = null; setTrack("warn", "Looking for a face"); }
+      fpsN++;
+    }
+    if (state.pose) drawOverlay(vctx, state.pose); else if (landmarker) drawGuide(vctx, W, H);
+  }
+  const now = performance.now();
+  if (now - fpsT > 1000) { $("fps").textContent = Math.round((fpsN * 1000) / (now - fpsT)) + " fps"; fpsT = now; fpsN = 0; }
+  rafId = requestAnimationFrame(loop);
+}
+
+/* Photo mode: draw the still once, re-draw on any option change. */
+let photo = null, photoPose = null;
+function refreshStill() {
+  if (state.mode === "idle") return;
+  if (state.mode !== "photo" || !photo) return;
+  const W = view.width, H = view.height;
+  vctx.clearRect(0, 0, W, H);
+  vctx.drawImage(photo, 0, 0, W, H);
+  if (photoPose) drawOverlay(vctx, photoPose);
+}
+
+function setTrack(kind, text) {
+  $("trackDot").className = "dot" + (kind === "on" ? " on" : kind === "warn" ? " warn" : "");
+  $("trackText").textContent = text;
+}
+function showStage(on) {
+  $("idle").hidden = on; $("hud").hidden = !on; $("toolbar").hidden = !on;
+  if (!on) { cancelAnimationFrame(heroRaf); heroRaf = requestAnimationFrame(animateHero); }
+}
+function showNotice(msg) { const n = $("notice"); n.textContent = msg; n.hidden = !msg; }
+
+/* --------------------------- Camera -------------------------- */
+let stream = null;
+$("startCam").addEventListener("click", startCamera);
+async function startCamera() {
+  showNotice("");
+  if (!navigator.mediaDevices?.getUserMedia) { showNotice("This browser cannot open a camera here. Use a photo instead."); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+  } catch (e) {
+    const blocked = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+    showNotice(blocked
+      ? "Camera access is blocked in this view. Use a photo here, or open the page from its own file or site to try it live."
+      : "No camera was found. Use a photo instead.");
+    return;
+  }
+  video.srcObject = stream; await video.play();
+  view.width = video.videoWidth || 1280; view.height = video.videoHeight || 960;
+  state.mode = "camera"; state.pose = null; state.shapeAcc = null;
+  showStage(true); cancelAnimationFrame(heroRaf);
+  setTrack("warn", "Loading face model");
+  loop();
+  loadModel().then(() => landmarker.setOptions({ runningMode: "VIDEO" })).catch((err) => {
+    console.error(err); setTrack("", "Face model failed to load");
+  });
+}
+function stopAll() {
+  cancelAnimationFrame(rafId);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  state.mode = "idle"; state.pose = null; photo = null; photoPose = null;
+  vctx.clearRect(0, 0, view.width, view.height);
+  showStage(false);
+}
+$("stopBtn").addEventListener("click", stopAll);
+
+/* --------------------------- Photo --------------------------- */
+$("photo").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  showNotice("");
+  const img = await createImageBitmap(file).catch(() => null);
+  if (!img) { showNotice("That file could not be read as an image."); return; }
+  cancelAnimationFrame(rafId);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const maxSide = 1600, k = Math.min(1, maxSide / Math.max(img.width, img.height));
+  view.width = Math.round(img.width * k); view.height = Math.round(img.height * k);
+  photo = img; photoPose = null; state.mode = "photo"; state.shapeAcc = null;
+  showStage(true); cancelAnimationFrame(heroRaf);
+  $("fps").textContent = "photo";
+  refreshStill();
+  try {
+    await loadModel();
+    landmarker.setOptions({ runningMode: "IMAGE" });
+    const res = landmarker.detect(img);
+    landmarker.setOptions({ runningMode: "VIDEO" });
+    const lms = res.faceLandmarks && res.faceLandmarks[0];
+    if (lms && lms.length >= 478) {
+      photoPose = poseFrom(lms, view.width, view.height, false);
+      for (let i = 0; i < 15; i++) updateFaceFacts(photoPose);
+      renderFaceFacts();
+      setTrack("on", "Face found");
+    } else setTrack("warn", "No face found in this photo");
+  } catch (err) { console.error(err); setTrack("", "Face model failed to load"); }
+  refreshStill();
+});
+
+/* ------------------------ Save photo ------------------------- */
+$("snapBtn").addEventListener("click", async () => {
+  const blob = await new Promise(r => view.toBlob(r, "image/png"));
+  if (!blob) return;
+  const frame = FRAMES.find(f => f.id === state.frame);
+  const filename = `try-on-${frame.id}.png`;
+  const dl = window.claude ? await window.claude.use("downloads").catch(() => null) : null;
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); } catch (e) { /* declined or unavailable */ }
+    return;
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ---------------------------- Boot --------------------------- */
+buildCards(); buildSwatches(); buildTints(); updateNowWearing();
+document.fonts?.ready.then(() => buildCards());
+heroRaf = requestAnimationFrame(animateHero);
+// Warm the model in the background so the first try-on is instant.
+setTimeout(() => loadModel().catch(() => {}), 600);
+</script>
